@@ -1,8 +1,78 @@
-# Tâche 2
+# Tests générés par IA et analyse de mutation sur Apache Tika
+
+Ce projet évalue ce que vaut, en pratique, un générateur de tests unitaires fondé sur un modèle de langage. Sur une classe réelle d'[Apache Tika](https://tika.apache.org/), `MediaType`, nous avons généré des tests avec ChatUniTest et un modèle exécuté localement, mesuré leur efficacité par analyse de mutation avec PIT, puis écrit à la main les tests nécessaires pour détecter tous les mutants détectables.
+
+Projet réalisé en binôme dans le cadre du cours IFT3913 à l'Université de Montréal. Le dépôt contient le code source d'Apache Tika (licence Apache 2.0), auquel s'ajoutent nos tests, notre configuration et notre analyse.
+
+## Résultats clés
+
+| Indicateur sur la classe `MediaType` | Au départ | À la fin |
+|---|---:|---:|
+| Score de mutation (PIT) | 46/85 (54 %) | 84/85 (99 %) |
+| Couverture de lignes (PIT) | 106/156 (68 %) | 156/156 (100 %) |
+| Tests de la classe | 9 | 136, tous réussis |
+| Tests générés par l'IA qui réussissent | 28/95 | 95/95 après correction de 38 méthodes |
+
+Le seul mutant restant est un mutant équivalent : il se comporte exactement comme le code d'origine, et aucun test ne peut le détecter. Tous les mutants détectables sont donc détectés.
+
+## Démarche
+
+1. __Choix de la cible.__ Sélection d'une classe déjà testée mais imparfaitement : `MediaType` avait 6 mutants survivants, tous dans la méthode privée `isSimpleName()`, et 33 mutants dans du code qu'aucun test n'exécutait.
+2. __Génération de tests par IA.__ Intégration de ChatUniTest au build Maven, avec le modèle `qwen2.5-coder:3b` servi localement par Ollama.
+3. __Évaluation des tests générés.__ Exécution, analyse des échecs et critique des oracles produits par l'IA.
+4. __Analyse de mutation.__ Mesure avec PIT de l'apport réel des tests générés, bruts puis corrigés.
+5. __Tests écrits à la main.__ 32 tests ciblant chacun des mutants restants, documentés un par un (intention, données, oracle).
+6. __Intégration continue.__ Exécution de tous les nouveaux tests et de l'analyse de mutation dans une GitHub Action.
+
+## Ce que le projet montre
+
+- __Un test généré peut réussir sans rien vérifier.__ Les 11 tests générés pour `text()` réussissent tous, mais parce que l'entrée est mal formée pour une autre raison que celle qu'ils croient tester. Seule l'analyse de mutation révèle ce genre de test.
+- __L'IA invente la spécification.__ La plupart des 67 tests générés en échec supposaient une validation, des exceptions ou des valeurs de retour que la classe n'a pas. Le modèle écrit ce que la méthode devrait faire d'après son nom, et non ce que fait le code.
+- __Un état statique peut fausser le test de mutation.__ `parse()` garde un cache statique, et PIT exécute plusieurs mutants dans la même machine virtuelle. Un test qui réutilise toujours la même chaîne laisse alors survivre des mutants qu'il devrait détecter. Le correctif : générer un nom jamais analysé à chaque exécution.
+- __Un mutant équivalent peut échapper aux filtres de PIT.__ Un `return null` placé dans un bloc `synchronized` est compilé avec la libération du verrou entre le chargement de `null` et le retour, et PIT ne le reconnaît plus comme déjà nul.
+- __Une mesure de mutation dépend du code compilé.__ Des classes compilées par un autre compilateur que celui de l'intégration continue donnaient des scores différents. Une compilation propre (`mvn clean`) rend les mesures locales identiques à celles de la GitHub Action.
+- __Un modèle local impose des compromis.__ Fenêtre de contexte de 4096 tokens, délai HTTP fixe de 5 minutes dans ChatUniTest, carte graphique de 4 Go : chaque contrainte a demandé un réglage précis.
+
+## Technologies
+
+Java 17 · Maven · JUnit 5 · PIT 1.19 (test de mutation) · ChatUniTest 2.1.1 · Ollama et `qwen2.5-coder` · GitHub Actions · Checkstyle · JaCoCo
+
+## Contenu du dépôt
+
+| Emplacement | Contenu |
+|---|---|
+| `tika-core/src/main/java/org/apache/tika/mime/MediaType.java` | La classe étudiée, non modifiée |
+| `tika-core/src/test/java/org/apache/tika/mime/MediaTypeTest.java` | Les tests d'origine d'Apache Tika |
+| `tika-core/chatunitest-tests/org/apache/tika/mime/` | La sortie brute de ChatUniTest, conservée telle quelle |
+| `tika-core/src/test/java/org/apache/tika/mime/MediaType_*_Test.java` | Les tests générés, corrigés pour réussir |
+| `tika-core/src/test/java/org/apache/tika/mime/MediaTypeManualTest.java` | Les 32 tests écrits à la main |
+| `tika-core/pom.xml` | La configuration de ChatUniTest et de PIT |
+| `.github/workflows/tache2-tests-mediatype.yml` | Le workflow d'intégration continue |
+
+## Reproduire les résultats
+
+Avec un JDK 17, depuis la racine du dépôt (`.\mvnw.cmd` à la place de `./mvnw` sous Windows) :
+
+```
+# Tous les tests de MediaType (136 tests)
+./mvnw -pl tika-core -am test "-Dtest=MediaType*Test" -Dsurefire.failIfNoSpecifiedTests=false
+
+# Analyse de mutation (le rapport est écrit dans tika-core/target/pit-reports/)
+./mvnw -pl tika-core -am install -DskipTests
+./mvnw -pl tika-core clean test-compile org.pitest:pitest-maven:mutationCoverage
+```
+
+La génération de tests avec ChatUniTest demande en plus Ollama et le modèle `qwen2.5-coder:3b` ; la configuration est décrite dans la section 2 du rapport.
+
+---
+
+# Rapport technique détaillé
+
+Le rapport ci-dessous documente chaque étape : choix de la classe, installation de ChatUniTest, évaluation et correction des tests générés, analyse de mutation, documentation des tests écrits à la main et comparaison des oracles.
 
 ## 1. Classe à tester:
 
-### 1.1Classe retenue
+### 1.1 Classe retenue
 Le choix de classes devait être basé sur la présence de tests pour la classe en question et une couverture de test inférieure à 100%. La classe __`MediaType.java`__, présente dans le module tika-core, a été choisie entre autres puisque son fichier de test existe[^1]. De plus, l'index[^2] de couverture avec JaCoCo indique une __couverture d'instructions de 79%__ et une couverture de branches de 74%. De plus, le _Pit Test Coverage Report_[^3] nous indique une __couverture de mutation de 54 %__, soit 46/85. En effet, malgré une couverture d'instruction de 79 %, 46 mutants sont tués, __6 mutants survivent__ et 33 mutants (38,82 %) n'ont pas pu être détectés par manque de tests adéquats exécutant le code correspondant à chaque mutant. Les mutants survivants montrent que certains tests ont réussi malgré la modification introduite par PIT, ce qui indique ainsi des comportements qui ne sont pas suffisamment vérifiés par les tests. Cela nous permet d'avoir des pistes sur les améliorations ou les ajouts à faire pour améliorer les tests existants. 
 
 La classe `MediaType.java` comporte 28 méthodes dont 11 avec une couverture inférieure à 100%.
@@ -542,14 +612,16 @@ Tous les nouveaux tests s'exécutent dans une GitHub Action ajoutée au dépôt 
 
 Le premier job exécute les trois jeux de tests de `MediaType` : les tests d'origine, les tests générés corrigés et les tests écrits à la main. Le profil `ci` vérifie aussi le formatage du code et les règles Checkstyle.
 
-Exécution de référence : https://github.com/ayaelb8/IFT3913_T2/actions/runs/38168580328
+Exécution de référence, dans le dépôt d'origine du cours : https://github.com/ayaelb8/IFT3913_T2/actions/runs/38168580328
 
 Pour vérifier le résultat, ouvrir cette exécution, puis le job `tests MediaType` et son étape « Tests de MediaType » : le journal Maven donne le nombre de tests exécutés par classe et se termine par `BUILD SUCCESS`. Les rapports détaillés sont joints à l'exécution : `rapports-surefire` pour les tests et `rapport-pit` pour l'analyse de mutation. Il faut être connecté à GitHub pour lire les journaux et télécharger les rapports.
 
 Les autres workflows du dépôt (`main jdk17 build`, `main jdk21 build`, etc.) sont les workflows d'origine d'Apache Tika. Ils construisent l'ensemble du projet, ne font pas partie de cette tâche et ne fonctionnent pas forcément dans ce dépôt.
 
-## Signalement de l'utilisation de l'IAg
-Je reconnais avoir utilisé ChatGPT (GPT-6, OpenAI, https://chatgpt.com/) tout au long du projet comme outil d’assistance pour comprendre des concepts, explorer des pistes de solution, résoudre des problèmes techniques, reformuler certaines idées, générer des propositions de contenu et structurer certaines parties du travail.
+## Utilisation d'outils d'IA générative
+
+En plus de ChatUniTest, qui est l'objet même du projet, des assistants d'IA générative, dont ChatGPT, ont été utilisés pendant le projet comme aide pour comprendre des concepts, résoudre des problèmes techniques et structurer la rédaction.
+
 
 [^1]: `tika-core/src/test/java/org/apache/tika/mime/MediaTypeTest.java`
 [^2]: `tika-core/target/site/jacoco/org.apache.tika.mime/index.html`
