@@ -299,7 +299,7 @@ Nous avons exécuté PIT sur `MediaType` avec les tests d'origine, puis avec les
 | Tests d'origine + tests générés corrigés | 65/85 (76 %) | 16 | 4 | 124/156 (79 %) |
 | Tests d'origine + tests générés corrigés + tests manuels | 84/85 (99 %) | 0 | 1 | 156/156 (100 %) |
 
-Les lignes « tests générés » portent sur la sortie brute de ChatUniTest, dont seuls les 28 tests qui réussissent sont pris en compte[^7]. Les lignes « tests générés corrigés » portent sur la version corrigée[^8], dont les 95 tests réussissent. Le score des tests d'origine est celui du rapport PIT initial cité au début de ce document.
+Les lignes « tests générés » portent sur la sortie brute de ChatUniTest, dont seuls les 28 tests qui réussissent sont pris en compte. Les lignes « tests générés corrigés » portent sur la version corrigée, dont les 95 tests réussissent. Le score des tests d'origine est celui du rapport PIT initial cité au début de ce document.
 
 __Les tests générés ne détectent donc pas tous les mutants.__ Seuls et sans correction, ils en détectent moins que les tests d'origine. Ajoutés aux tests d'origine, ils font passer le score de 54 % à 69 %, et 26 mutants restent non détectés. Même une fois corrigés, ils laissent 20 mutants non détectés.
 
@@ -629,8 +629,6 @@ En plus de ChatUniTest, qui est l'objet même du projet, des assistants d'IA gé
 [^4]: `tika-core/target/site/jacoco/org.apache.tika.mime/MediaType.html`
 [^5]: `tika-core/target/pit-reports/org.apache.tika.mime/MediaType.java.html`
 [^6]: `tika-core/src/main/java/org/apache/tika/mime/MediaType.java`
-[^7]: <img width="647" height="351" alt="image" src="https://github.com/user-attachments/assets/96282d79-e7f3-431c-8c06-2a483a36cb6d" />
-[^8]: <img width="636" height="356" alt="image" src="https://github.com/user-attachments/assets/00c97907-5fed-4a98-9cd4-135f01ba92df" />
 
 
 
